@@ -41,6 +41,9 @@ type App struct {
 	// WebUI specifies whether Tailscale nodes should run the Web UI for remote management.
 	WebUI bool `json:"webui,omitempty" caddy:"namespace=tailscale.webui"`
 
+	// AcceptRoutes specifies whether nodes should accept routes from other Tailnet nodes.
+	AcceptRoutes bool `json:"accept_routes,omitempty" caddy:"namespace=tailscale.accept_routes"`
+
 	// Tags to apply to all nodes when registered.
 	Tags []string `json:"tags,omitempty" caddy:"namespace=tailscale.tags"`
 
@@ -65,6 +68,9 @@ type Node struct {
 
 	// WebUI specifies whether the node should run the Web UI for remote management.
 	WebUI opt.Bool `json:"webui,omitempty" caddy:"namespace=tailscale.webui"`
+
+	// AcceptRoutes specifies whether to accept routes from other Tailnet nodes.
+	AcceptRoutes opt.Bool `json:"accept_routes,omitempty" caddy:"namespace=tailscale.accept_routes"`
 
 	// Tags to apply to the node when registered. Overrides global tags.
 	Tags []string `json:"tags,omitempty" caddy:"namespace=tailscale.tags"`
@@ -148,6 +154,16 @@ func parseAppConfig(d *caddyfile.Dispenser, _ any) (any, error) {
 			} else {
 				app.WebUI = true
 			}
+		case "accept_routes":
+			if d.NextArg() {
+				v, err := strconv.ParseBool(d.Val())
+				if err != nil {
+					return nil, d.WrapErr(err)
+				}
+				app.AcceptRoutes = v
+			} else {
+				app.AcceptRoutes = true
+			}
 		case "tags":
 			app.Tags = d.RemainingArgs()
 		default:
@@ -230,6 +246,16 @@ func parseNodeConfig(d *caddyfile.Dispenser) (Node, error) {
 				node.WebUI = opt.NewBool(v)
 			} else {
 				node.WebUI = opt.NewBool(true)
+			}
+		case "accept_routes":
+			if segment.NextArg() {
+				v, err := strconv.ParseBool(segment.Val())
+				if err != nil {
+					return node, segment.WrapErr(err)
+				}
+				node.AcceptRoutes = opt.NewBool(v)
+			} else {
+				node.AcceptRoutes = opt.NewBool(true)
 			}
 		case "tags":
 			node.Tags = segment.RemainingArgs()

@@ -28,6 +28,7 @@ import (
 	"go.uber.org/zap"
 	"tailscale.com/client/local"
 	"tailscale.com/hostinfo"
+	"tailscale.com/ipn"
 	"tailscale.com/tsnet"
 )
 
@@ -295,6 +296,24 @@ func getNode(ctx caddy.Context, name string) (*tailscaleNode, error) {
 			return nil, err
 		}
 
+		if getAcceptRoutes(name, app) {
+			if _, err := s.Up(context.Background()); err != nil {
+				return nil, err
+			}
+			lc, err := s.LocalClient()
+			if err != nil {
+				return nil, err
+			}
+			if _, err := lc.EditPrefs(context.Background(), &ipn.MaskedPrefs{
+				Prefs: ipn.Prefs{
+					RouteAll: true,
+				},
+				RouteAllSet: true,
+			}); err != nil {
+				return nil, err
+			}
+		}
+
 		return &tailscaleNode{
 			s,
 		}, nil
@@ -400,6 +419,15 @@ func getWebUI(name string, app *App) bool {
 		}
 	}
 	return app.WebUI
+}
+
+func getAcceptRoutes(name string, app *App) bool {
+	if node, ok := app.Nodes[name]; ok {
+		if v, ok := node.AcceptRoutes.Get(); ok {
+			return v
+		}
+	}
+	return app.AcceptRoutes
 }
 
 func getTags(name string, app *App) []string {
