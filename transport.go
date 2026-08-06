@@ -9,8 +9,10 @@ import (
 	"net/http"
 
 	"github.com/caddyserver/caddy/v2"
+	"github.com/caddyserver/caddy/v2/caddyconfig"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp/reverseproxy"
+	"github.com/caddyserver/caddy/v2/modules/caddytls"
 )
 
 func init() {
@@ -24,8 +26,12 @@ type Transport struct {
 	node *tailscaleNode
 
 	// A non-nil TLS config enables TLS.
-	// We do not currently use the config values for anything.
 	TLS *reverseproxy.TLSConfig `json:"tls,omitempty"`
+
+	// rt is the http.RoundTripper used for requests.
+	// Set during Provision; may differ from node.HTTPClient().Transport
+	// when custom TLS settings (e.g. InsecureSkipVerify) are configured.
+	rt http.RoundTripper
 }
 
 func (t *Transport) CaddyModule() caddy.ModuleInfo {
@@ -55,13 +61,97 @@ func (t *Transport) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 		t.Name = defaultNodeName
 	}
 
+	// Parse optional block for TLS configuration
+	for nesting := d.Nesting(); d.NextBlock(nesting); {
+		switch d.Val() {
+		case "tls_client_auth":
+			if t.TLS == nil {
+				t.TLS = new(reverseproxy.TLSConfig)
+			}
+			if d.CountRemainingArgs() == 1 {
+				_, t.TLS.ClientCertificateAutomate = d.NextArg(), d.Val()
+			} else if d.CountRemainingArgs() == 2 {
+				_, t.TLS.ClientCertificateFile = d.NextArg(), d.Val()
+				_, t.TLS.ClientCertificateKeyFile = d.NextArg(), d.Val()
+			} else {
+				return d.ArgErr()
+			}
+
+		case "tls_insecure_skip_verify":
+			if d.NextArg() {
+				return d.ArgErr()
+			}
+			if t.TLS == nil {
+				t.TLS = new(reverseproxy.TLSConfig)
+			}
+			t.TLS.InsecureSkipVerify = true
+
+		case "tls_server_name":
+			if !d.NextArg() {
+				return d.ArgErr()
+			}
+			if t.TLS == nil {
+				t.TLS = new(reverseproxy.TLSConfig)
+			}
+			t.TLS.ServerName = d.Val()
+
+		case "tls_trust_pool":
+			if !d.NextArg() {
+				return d.ArgErr()
+			}
+			modStem := d.Val()
+			modID := "tls.ca_pool.source." + modStem
+			unm, err := caddyfile.UnmarshalModule(d, modID)
+			if err != nil {
+				return err
+			}
+			ca, ok := unm.(caddytls.CA)
+			if !ok {
+				return d.Errf("module %s is not a caddytls.CA", modID)
+			}
+			if t.TLS == nil {
+				t.TLS = new(reverseproxy.TLSConfig)
+			}
+			if t.TLS.CARaw != nil {
+				return d.Err("cannot specify \"tls_trust_pool\" twice in caddyfile")
+			}
+			t.TLS.CARaw = caddyconfig.JSONModuleObject(ca, "provider", modStem, nil)
+
+		default:
+			return d.Errf("unrecognized subdirective %s", d.Val())
+		}
+	}
+
 	return nil
 }
 
 func (t *Transport) Provision(ctx caddy.Context) error {
 	var err error
 	t.node, err = getNode(ctx, t.Name)
-	return err
+	if err != nil {
+		return err
+	}
+
+	tsTransport := t.node.HTTPClient().Transport
+	t.rt = tsTransport
+
+	// Apply custom TLS configuration to the transport if set.
+	if t.TLS != nil {
+		httpTransport, ok := tsTransport.(*http.Transport)
+		if !ok {
+			return nil
+		}
+
+		// MakeTLSClientConfig handles InsecureSkipVerify, ServerName,
+		// and CARaw (custom CA pool via tls_trust_pool).
+		tlsCfg, err := t.TLS.MakeTLSClientConfig(ctx)
+		if err != nil {
+			return err
+		}
+		httpTransport.TLSClientConfig = tlsCfg
+	}
+
+	return nil
 }
 
 func (t *Transport) Cleanup() error {
@@ -78,7 +168,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			req.URL.Scheme = "http"
 		}
 	}
-	return t.node.HTTPClient().Transport.RoundTrip(req)
+	return t.rt.RoundTrip(req)
 }
 
 // TLSEnabled returns true if TLS is enabled.
