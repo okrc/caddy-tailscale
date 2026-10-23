@@ -1,6 +1,6 @@
 module github.com/tailscale/caddy-tailscale
 
-go 1.27.1
+go 1.27.3
 
 require (
 	github.com/caddyserver/caddy/v2 v2.11.7
@@ -9,7 +9,7 @@ require (
 	github.com/mholt/caddy-l4 v0.1.2
 	github.com/tailscale/tscert v0.0.0-20251216020129-aea342f6d747
 	go.uber.org/zap v1.28.0
-	tailscale.com v1.104.0
+	tailscale.com v1.104.2
 )
 
 require (
