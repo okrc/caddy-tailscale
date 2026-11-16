@@ -1,6 +1,6 @@
 module github.com/tailscale/caddy-tailscale
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/caddyserver/caddy/v2 v2.11.9
@@ -9,7 +9,7 @@ require (
 	github.com/mholt/caddy-l4 v0.1.2
 	github.com/tailscale/tscert v0.0.0-20251216020129-aea342f6d747
 	go.uber.org/zap v1.28.0
-	tailscale.com v1.104.5
+	tailscale.com v1.104.7
 )
 
 require (
@@ -136,7 +136,7 @@ require (
 	github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f // indirect
 	github.com/tailscale/peercred v0.0.0-20250107143737-35a0c7bd7edc // indirect
 	github.com/tailscale/web-client-prebuilt v0.0.0-20260917222731-e0ed2d0d0fea // indirect
-	github.com/tailscale/wireguard-go v0.0.0-20260928213032-417aef361226 // indirect
+	github.com/tailscale/wireguard-go v0.0.0-20261106233718-9e0ab45c16ca // indirect
 	github.com/urfave/cli v1.22.17 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yuin/goldmark v1.8.6 // indirect
